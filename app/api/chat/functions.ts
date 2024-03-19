@@ -1,20 +1,29 @@
+import { endOfDay, interval, isWithinInterval, startOfDay } from "date-fns";
 import { ChatCompletionCreateParams } from "openai/resources/chat/index";
 
 export const functions: ChatCompletionCreateParams.Function[] = [
   {
     name: "get_forecast",
     description:
-      "Given longitude, latitude and a future date, provides real-time weather forecasts",
+      "Given a list of longitude and latitude, and a date in the future, provides real-time weather forecasts",
     parameters: {
       type: "object",
       properties: {
-        lat: {
-          type: "string",
-          description: "Latitude",
-        },
-        lon: {
-          type: "string",
-          description: "Longitude",
+        coordinates: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              lat: {
+                type: "string",
+                description: "Latitude",
+              },
+              lon: {
+                type: "string",
+                description: "Longitude",
+              },
+            },
+          },
         },
         date: {
           type: "string",
@@ -40,33 +49,40 @@ export const functions: ChatCompletionCreateParams.Function[] = [
   // },
 ];
 
-async function get_forecast(args: { lat: string; lon: string }) {
+async function get_forecast(args: {
+  coordinates: { lat: string; lon: string }[];
+  date: string;
+}) {
   console.log("hello from get_forecast", args);
-  const answer = await fetch(
-    `https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${args.lat}&lon=${args.lon}`,
-  )
-    .then((r) => r.json())
-    .then((list) => list["properties"]["timeseries"].slice(0, 20));
+  const answers = [];
+  const date_start = startOfDay(new Date(args.date));
+  const date_end = endOfDay(new Date(args.date));
+
+  for (const coordinates of Object.values(args.coordinates)) {
+    const timeseries = await fetch(
+      `https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${coordinates.lat}&lon=${coordinates.lon}`,
+    )
+      .then((r) => r.json())
+      .then((list) => list["properties"]["timeseries"]);
+
+    const forecast = timeseries
+      .filter((series: any) => {
+        const date = new Date(series.time);
+        return isWithinInterval(date, interval(date_start, date_end));
+      })
+      .map((series) => series.data.instant);
+
+    answers.push({
+      coordinates,
+      forecast,
+    });
+  }
 
   return {
-    description: "Weather forecast for tomorrow",
-    answer,
+    description: "Weather forecast for the given date and coordinates",
+    answers,
   };
 }
-
-// async function geolocate_place() {
-//   console.log("hello from geolocate_place");
-//   const answer = await fetch(
-//     "https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=60.10&lon=9.58",
-//   )
-//     .then((r) => r.json())
-//     .then((list) => list["properties"]["timeseries"][0]);
-//   console.debug(answer);
-//   return {
-//     description: "Weather forecast for tomorrow",
-//     answer,
-//   };
-// }
 
 export async function runFunction(name: string, args: any) {
   switch (name) {

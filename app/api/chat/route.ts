@@ -43,7 +43,16 @@ export async function POST(req: Request) {
   const messages = [
     {
       role: "user",
-      content: `The current time is ${new Date().toISOString()}`,
+      content: `
+      1. The current time is ${new Date().toISOString()}
+      2. If asked about weather forecasts, please answer with a bulleted list containing the following items:
+      - temperature
+      - cloudiness
+      - humidity
+      - wind
+      - precipitation
+      3. When displaying temperatures, use fahrenheit. Convert any celsius values to fahrenheit.
+      4. When displaying weather for a location, always include the coordinates in the answer.`,
     },
     ...prompts,
   ];
