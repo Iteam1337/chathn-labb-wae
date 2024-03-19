@@ -1,10 +1,7 @@
 import { kv } from "@vercel/kv";
 import { Ratelimit } from "@upstash/ratelimit";
 import { OpenAI } from "openai";
-import {
-  OpenAIStream,
-  StreamingTextResponse,
-} from "ai";
+import { OpenAIStream, StreamingTextResponse } from "ai";
 import { functions, runFunction } from "./functions";
 
 // Create an OpenAI API client (that's edge friendly!)
@@ -42,7 +39,14 @@ export async function POST(req: Request) {
     }
   }
 
-  const { messages } = await req.json();
+  const { messages: prompts } = await req.json();
+  const messages = [
+    {
+      role: "user",
+      content: `The current time is ${new Date().toISOString()}`,
+    },
+    ...prompts,
+  ];
 
   // check if the conversation requires a function call to be made
   const initialResponse = await openai.chat.completions.create({

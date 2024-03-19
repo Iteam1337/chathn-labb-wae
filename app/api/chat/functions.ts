@@ -1,10 +1,10 @@
-import { CompletionCreateParams } from "openai/resources/chat/index";
+import { ChatCompletionCreateParams } from "openai/resources/chat/index";
 
-export const functions: CompletionCreateParams.Function[] = [
+export const functions: ChatCompletionCreateParams.Function[] = [
   {
     name: "get_forecast",
     description:
-      "Grants access to real-time weather forecast data for a pair of latitude and longitude",
+      "Given longitude, latitude and a future date, provides real-time weather forecasts",
     parameters: {
       type: "object",
       properties: {
@@ -16,8 +16,12 @@ export const functions: CompletionCreateParams.Function[] = [
           type: "string",
           description: "Longitude",
         },
+        date: {
+          type: "string",
+          description: "Date",
+        },
       },
-      required: [],
+      required: ["lat", "lon", "date"],
     },
   },
   // {
