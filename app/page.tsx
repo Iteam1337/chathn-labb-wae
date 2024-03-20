@@ -11,7 +11,13 @@ import remarkGfm from "remark-gfm";
 import Textarea from "react-textarea-autosize";
 import { toast } from "sonner";
 
-const examples = ["What will the weather be in Stockholm tomorrow?"];
+const examples = [
+  "What will the weather be in Stockholm tomorrow?",
+  `I would like a list of weather forecasts for the following locations:
+Stockholm
+Madrid
+Umeå`,
+];
 
 export default function Chat() {
   const formRef = useRef<HTMLFormElement>(null);

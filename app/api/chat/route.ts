@@ -2,7 +2,8 @@ import { kv } from "@vercel/kv";
 import { Ratelimit } from "@upstash/ratelimit";
 import { OpenAI } from "openai";
 import { OpenAIStream, StreamingTextResponse } from "ai";
-import { functions, runFunction } from "./functions";
+import { functions, get_forecast, runFunction, tools } from "./functions";
+import { Stream } from "openai/streaming";
 
 // Create an OpenAI API client (that's edge friendly!)
 const openai = new OpenAI({
@@ -42,7 +43,7 @@ export async function POST(req: Request) {
   const { messages: prompts } = await req.json();
   const messages = [
     {
-      role: "user",
+      role: "system",
       content: `
       1. The current time is ${new Date().toISOString()}
       2. If asked about weather forecasts, please answer with a bulleted list containing the following items:
@@ -58,28 +59,44 @@ export async function POST(req: Request) {
   ];
 
   // check if the conversation requires a function call to be made
-  const initialResponse = await openai.chat.completions.create({
-    model: "gpt-3.5-turbo-0613",
+  const response = await openai.chat.completions.create({
+    model: "gpt-3.5-turbo-0125",
     messages,
-    stream: true,
-    functions,
-    function_call: "auto",
+    stream: false,
+    tools: [{ type: "function", function: functions[0] }],
+    tool_choice: "auto",
   });
 
-  const stream = OpenAIStream(initialResponse, {
-    experimental_onFunctionCall: async (
-      { name, arguments: args },
-      createFunctionCallMessages,
-    ) => {
-      const result = await runFunction(name, args);
-      const newMessages = createFunctionCallMessages(result);
-      return openai.chat.completions.create({
-        model: "gpt-3.5-turbo-0613",
-        stream: true,
-        messages: [...messages, ...newMessages],
+  const responseMessage = response.choices[0].message;
+
+  const toolCalls = responseMessage.tool_calls;
+  if (toolCalls) {
+    messages.push(responseMessage);
+    for (const toolCall of toolCalls) {
+      const functionName = toolCall.function.name;
+      const functionArgs = JSON.parse(toolCall.function.arguments);
+
+      console.log("tool call: ", toolCall);
+      const functionResponse = await get_forecast({
+        coordinate: functionArgs.coordinate,
+        date: functionArgs.date,
       });
-    },
-  });
 
-  return new StreamingTextResponse(stream);
+      messages.push({
+        tool_call_id: toolCall.id,
+        role: "tool",
+        name: functionName,
+        content: JSON.stringify(functionResponse),
+      }); // extend conversation with function response
+    }
+
+    const secondResponse = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo-0125",
+      messages: messages,
+      stream: true,
+    }); // get a new response from the model where it can see the function response
+
+    const stream = OpenAIStream(secondResponse);
+    return new StreamingTextResponse(stream);
+  }
 }
